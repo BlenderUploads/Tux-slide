@@ -8,8 +8,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find GLFW
 find_package(glfw3 REQUIRED)
 
-# Add your executable (matches your real file path)
-add_executable(tux_game src/main.cpp)
+# Collect source files under src/
+file(GLOB_RECURSE GAME_SOURCES
+     "${CMAKE_SOURCE_DIR}/src/*.cpp"
+     "${CMAKE_SOURCE_DIR}/src/*.cc"
+     "${CMAKE_SOURCE_DIR}/src/*.cxx"
+     "${CMAKE_SOURCE_DIR}/src/*.c")
+
+if(NOT GAME_SOURCES)
+    message(FATAL_ERROR "No source files found in src/ — ensure your source files are present and the path is correct.")
+endif()
+
+add_executable(tux_game ${GAME_SOURCES})
 
 # Link GLFW
 target_link_libraries(tux_game PRIVATE glfw)
