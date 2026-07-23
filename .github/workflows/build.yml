@@ -36,26 +36,51 @@ jobs:
     # --- 3. WINDOWS SETUP & BUILD ---
     - name: Install Windows Dependencies
       if: matrix.os == 'windows-latest'
-      shell: bash
+      shell: pwsh
       run: |
-        curl -L -o glfw.zip https://github.com
-        unzip glfw.zip
-        mv glfw-3.4.bin.WIN64 /c/glfw
-        echo "glfw3_DIR=/c/glfw/lib-vc2022" >> $GITHUB_ENV
+        # Install NSIS (required by CPack NSIS generator)
+        choco install nsis -y
+
+        # Download a real GLFW binary release for Windows (adjust version if needed)
+        $url = 'https://github.com/glfw/glfw/releases/download/3.4.0/glfw-3.4.bin.WIN64.zip'
+        Write-Host "Downloading $url"
+        Invoke-WebRequest -Uri $url -OutFile glfw.zip
+
+        Write-Host "Extracting glfw.zip"
+        Expand-Archive -Path glfw.zip -DestinationPath C:\ -Force
+
+        # Normalize the extracted path to C:\glfw
+        if (Test-Path 'C:\glfw-3.4.bin.WIN64') {
+          Remove-Item -Recurse -Force C:\glfw -ErrorAction SilentlyContinue
+          Move-Item -Path 'C:\glfw-3.4.bin.WIN64' -Destination 'C:\glfw'
+        } elseif (-not (Test-Path 'C:\glfw')) {
+          Get-ChildItem C:\ | Out-String | Write-Host
+          throw 'GLFW extraction failed - unexpected archive layout'
+        }
+
+        # Set environment variable for CMake to locate GLFW
+        Add-Content -Path $env:GITHUB_ENV -Value 'glfw3_DIR=C:\\glfw\\lib-vc2022'
+        Write-Host "glfw3_DIR set to C:\\glfw\\lib-vc2022"
 
     # --- 4. RUN CMAKE CONFIGURATION ---
     - name: Configure CMake
       run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -Dglfw3_DIR="${{ env.glfw3_DIR }}"
+        # Only pass -Dglfw3_DIR when it is set in the environment
+        if [ -n "${GLFW3_DIR:-}" ]; then
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -Dglfw3_DIR="${GLFW3_DIR}"
+        else
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release
+        fi
 
     # --- 5. COMPILATION ---
     - name: Build Game
       run: cmake --build build --config Release
 
     # --- 6. PACKAGING STEP ---
-    
+
     # Linux packaging outputs a .deb file
     - name: Package Linux (.deb)
       if: matrix.os == 'ubuntu-latest'
@@ -66,6 +91,7 @@ jobs:
     # Windows packaging outputs an installer executable (.exe) via NSIS
     - name: Package Windows (.exe Installer)
       if: matrix.os == 'windows-latest'
+      shell: pwsh
       run: |
         cd build
         cpack -G NSIS
@@ -75,8 +101,9 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: |
         mkdir -p build/TuxSlide.app/Contents/MacOS
-        cp build/MyGame build/TuxSlide.app/Contents/MacOS/TuxSlide
-        
+        # The executable target name is 'tux_game' per CMakeLists.txt
+        cp build/tux_game build/TuxSlide.app/Contents/MacOS/TuxSlide || cp build/Release/tux_game build/TuxSlide.app/Contents/MacOS/TuxSlide
+
         # Create a beautiful dmg installer container
         create-dmg \
           --volname "TuxSlide Installer" \
