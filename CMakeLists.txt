@@ -68,3 +68,56 @@ if(WIN32)
 endif()
 
 include(CPack)
+
+# --- packaging start ---
+
+# make sure you already define a target for your executable, e.g.:
+# add_executable(tux-slide src/main.cpp ...)
+
+# On macOS create an .app bundle:
+if(APPLE)
+  set_target_properties(tux-slide PROPERTIES MACOSX_BUNDLE TRUE)
+endif()
+
+# Install the built product and resources so CPack can package them.
+# Adjust resource files and paths to match your project.
+install(TARGETS tux-slide
+  RUNTIME DESTINATION bin                # linux/windows
+  BUNDLE DESTINATION .                   # macOS .app goes to top-level
+)
+
+# Install runtime assets (models/textures/sounds) into Resources for macOS or share for other OSes
+install(DIRECTORY assets/ DESTINATION share/tux-slide/assets)
+
+# Basic package metadata
+set(CPACK_PACKAGE_NAME "Tux-slide")
+set(CPACK_PACKAGE_VENDOR "YourNameOrOrg")
+set(CPACK_PACKAGE_CONTACT "you@example.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A tiny low-poly 3D game starring Tux")
+set(CPACK_PACKAGE_VERSION_MAJOR "1")
+set(CPACK_PACKAGE_VERSION_MINOR "0")
+set(CPACK_PACKAGE_VERSION_PATCH "0")
+set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+
+# Generators you want to produce. Keep platform-specific generators but CPack will only produce what works on the current machine.
+# On Windows: NSIS -> produces an .exe installer (NSIS must be installed)
+# On macOS: DragNDrop -> .dmg (uses hdiutil)
+# On Linux: DEB -> .deb (requires dpkg-deb available)
+set(CPACK_GENERATOR "NSIS;DragNDrop;DEB")
+
+# Windows/NSIS customization
+set(CPACK_NSIS_DISPLAY_NAME "${CPACK_PACKAGE_NAME}")
+set(CPACK_NSIS_CONTACT "${CPACK_PACKAGE_CONTACT}")
+set(CPACK_NSIS_MODINSTALL "on")
+
+# Debian customization
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_CONTACT}")
+# If your runtime needs specific system packages, list them here:
+# set(CPACK_DEBIAN_PACKAGE_DEPENDS "libgl1-mesa-glx (>= 17), libglfw3")
+
+# Include system libs so CPack pulls standard runtime libs if needed
+include(InstallRequiredSystemLibraries)
+
+# Finally include CPack
+include(CPack)
+# --- packaging end ---
