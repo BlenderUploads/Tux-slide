@@ -1,4 +1,4 @@
-name: Build Multi-Platform Game
+name: Build Installers (EXE, DMG, DEB)
 
 on:
   push:
@@ -9,50 +9,91 @@ on:
 jobs:
   build:
     name: Build on ${{ matrix.os }}
-    runs-downstream: false
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
-        # Spin up three different virtual machines simultaneously
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    # --- SETUP DEPENDENCIES FOR EACH OPERATING SYSTEM ---
+    # --- 1. LINUX SETUP & BUILD ---
     - name: Install Linux Dependencies
       if: matrix.os == 'ubuntu-latest'
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake g++ libglfw3-dev libgl1-mesa-dev libxrandr-dev libxininerama-dev libxcursor-dev libxi-dev
+        sudo apt-get install -y cmake g++ libglfw3-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev file
 
+    # --- 2. MACOS SETUP & BUILD ---
     - name: Install macOS Dependencies
       if: matrix.os == 'macos-latest'
       run: |
         brew update
-        brew install cmake glfw
+        brew install cmake glfw create-dmg
 
-    # Windows usually comes with CMake and Visual Studio pre-installed on GitHub runners.
-    # If using package managers like vcpkg, you would configure it here.
+    # --- 3. WINDOWS SETUP & BUILD ---
+    - name: Install Windows Dependencies
+      if: matrix.os == 'windows-latest'
+      shell: bash
+      run: |
+        curl -L -o glfw.zip https://github.com
+        unzip glfw.zip
+        mv glfw-3.4.bin.WIN64 /c/glfw
+        echo "glfw3_DIR=/c/glfw/lib-vc2022" >> $GITHUB_ENV
 
-    # --- BUILD THE GAME ---
+    # --- 4. RUN CMAKE CONFIGURATION ---
     - name: Configure CMake
-      run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=Release
+      run: |
+        cmake -B build \
+          -DCMAKE_BUILD_TYPE=Release \
+          -Dglfw3_DIR="${{ env.glfw3_DIR }}"
 
-    - name: Build Game Binary
-      run: cmake --build ${{ github.workspace }}/build --config Release
+    # --- 5. COMPILATION ---
+    - name: Build Game
+      run: cmake --build build --config Release
 
-    # --- PACKAGE & UPLOAD ---
-    # This grabs the finished executable/binary and uploads it back to GitHub
-    - name: Upload Build Artifact
+    # --- 6. PACKAGING STEP ---
+    
+    # Linux packaging outputs a .deb file
+    - name: Package Linux (.deb)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        cd build
+        cpack -G DEB
+
+    # Windows packaging outputs an installer executable (.exe) via NSIS
+    - name: Package Windows (.exe Installer)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cd build
+        cpack -G NSIS
+
+    # Mac packaging manually creates an App structure and wraps it in a .dmg
+    - name: Package macOS (.dmg)
+      if: matrix.os == 'macos-latest'
+      run: |
+        mkdir -p build/TuxSlide.app/Contents/MacOS
+        cp build/MyGame build/TuxSlide.app/Contents/MacOS/TuxSlide
+        
+        # Create a beautiful dmg installer container
+        create-dmg \
+          --volname "TuxSlide Installer" \
+          --window-size 500 300 \
+          --icon-size 100 \
+          --icon "TuxSlide.app" 175 120 \
+          --hide-extension "TuxSlide.app" \
+          --app-drop-link 325 120 \
+          build/TuxSlide.dmg \
+          build/TuxSlide.app/
+
+    # --- 7. UPLOAD THE RESULTING PACKAGES ---
+    - name: Upload Installer Packages
       uses: actions/upload-artifact@v4
       with:
-        name: game-${{ matrix.os }}
+        name: installers-${{ matrix.os }}
         path: |
-          ${{ github.workspace }}/build/Release/
-          ${{ github.workspace }}/build/game
-          ${{ github.workspace }}/build/*.exe
-        if-no-files-found: warn
+          build/*.deb
+          build/*.exe
+          build/*.dmg
