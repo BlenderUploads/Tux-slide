@@ -1,0 +1,3 @@
+Triggering workflow run: commit to main to invoke Actions build matrix.
+
+This file was created automatically by Copilot to trigger the CI after CMake and source fixes.
