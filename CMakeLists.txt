@@ -21,14 +21,21 @@ endif()
 
 add_executable(tux_game ${GAME_SOURCES})
 
-# Link GLFW
-target_link_libraries(tux_game PRIVATE glfw)
+# Link GLFW (the imported target or library name may vary between platforms/distributions)
+# Prefer imported target if available:
+if(TARGET glfw)
+  target_link_libraries(tux_game PRIVATE glfw)
+else()
+  target_link_libraries(tux_game PRIVATE glfw3)
+endif()
 
 # Platform-specific configurations
 if(UNIX AND NOT APPLE)
     # Linux requires OpenGL and X11 libraries
     find_package(OpenGL REQUIRED)
-    target_link_libraries(tux_game PRIVATE ${OPENGL_LIBRARIES} X11 randr xinerama cursor xi)
+    find_package(X11 REQUIRED)
+    # Link OpenGL and the various X11 libs needed
+    target_link_libraries(tux_game PRIVATE ${OPENGL_LIBRARIES} ${X11_LIBRARIES} Xrandr Xinerama Xcursor Xi)
 elseif(APPLE)
     # macOS requires system frameworks
     target_link_libraries(tux_game PRIVATE "-framework Cocoa" "-framework IOKit" "-framework CoreVideo")
