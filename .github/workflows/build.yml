@@ -1,0 +1,58 @@
+name: Build Multi-Platform Game
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-downstream: false
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # Spin up three different virtual machines simultaneously
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # --- SETUP DEPENDENCIES FOR EACH OPERATING SYSTEM ---
+    - name: Install Linux Dependencies
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake g++ libglfw3-dev libgl1-mesa-dev libxrandr-dev libxininerama-dev libxcursor-dev libxi-dev
+
+    - name: Install macOS Dependencies
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew update
+        brew install cmake glfw
+
+    # Windows usually comes with CMake and Visual Studio pre-installed on GitHub runners.
+    # If using package managers like vcpkg, you would configure it here.
+
+    # --- BUILD THE GAME ---
+    - name: Configure CMake
+      run: cmake -B ${{ github.workspace }}/build -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build Game Binary
+      run: cmake --build ${{ github.workspace }}/build --config Release
+
+    # --- PACKAGE & UPLOAD ---
+    # This grabs the finished executable/binary and uploads it back to GitHub
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: game-${{ matrix.os }}
+        path: |
+          ${{ github.workspace }}/build/Release/
+          ${{ github.workspace }}/build/game
+          ${{ github.workspace }}/build/*.exe
+        if-no-files-found: warn
